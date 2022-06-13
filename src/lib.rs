@@ -115,6 +115,8 @@ macro_rules! from {
     };
 }
 
+#[cfg(unix)]
+mod cmsg;
 mod sockaddr;
 mod socket;
 mod sockref;
@@ -140,6 +142,9 @@ pub use sockref::SockRef;
     target_os = "solaris",
 )))]
 pub use socket::InterfaceIndexOrAddress;
+
+#[cfg(unix)]
+pub use cmsg::CmsgBuffer;
 
 /// Specification of the communication domain for a socket.
 ///

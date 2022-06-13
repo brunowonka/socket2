@@ -19,6 +19,8 @@ use std::os::windows::io::{FromRawSocket, IntoRawSocket};
 use std::time::Duration;
 
 use crate::sys::{self, c_int, getsockopt, setsockopt, Bool};
+#[cfg(unix)]
+use crate::CmsgBuffer;
 use crate::{Domain, Protocol, SockAddr, TcpKeepalive, Type};
 #[cfg(not(target_os = "redox"))]
 use crate::{MaybeUninitSlice, RecvFlags};
@@ -659,6 +661,23 @@ impl Socket {
         flags: c_int,
     ) -> io::Result<usize> {
         sys::send_to_vectored(self.as_raw(), bufs, addr, flags)
+    }
+
+    #[cfg(unix)]
+    /// Sends data on the socket accompanied by ancillary control message data.
+    pub fn sendmsg<B: AsRef<[u8]>>(
+        &self,
+        addr: Option<&SockAddr>,
+        bufs: &[IoSlice<'_>],
+        cmsg: &CmsgBuffer<B>,
+        flags: c_int,
+    ) -> io::Result<usize> {
+        let (addrptr, addrlen) = if let Some(addr) = addr {
+            (addr.as_storage_ptr(), addr.len())
+        } else {
+            (std::ptr::null(), 0)
+        };
+        sys::sendmsg(self.as_raw(), addrptr, addrlen, bufs, cmsg.buffer(), flags)
     }
 }
 

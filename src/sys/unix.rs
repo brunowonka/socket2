@@ -801,7 +801,7 @@ pub(crate) fn send(fd: Socket, buf: &[u8], flags: c_int) -> io::Result<usize> {
 
 #[cfg(not(target_os = "redox"))]
 pub(crate) fn send_vectored(fd: Socket, bufs: &[IoSlice<'_>], flags: c_int) -> io::Result<usize> {
-    sendmsg(fd, ptr::null(), 0, bufs, flags)
+    sendmsg(fd, ptr::null(), 0, bufs, IoSlice::new(&[]), flags)
 }
 
 pub(crate) fn send_to(fd: Socket, buf: &[u8], addr: &SockAddr, flags: c_int) -> io::Result<usize> {
@@ -823,16 +823,24 @@ pub(crate) fn send_to_vectored(
     addr: &SockAddr,
     flags: c_int,
 ) -> io::Result<usize> {
-    sendmsg(fd, addr.as_storage_ptr(), addr.len(), bufs, flags)
+    sendmsg(
+        fd,
+        addr.as_storage_ptr(),
+        addr.len(),
+        bufs,
+        IoSlice::new(&[]),
+        flags,
+    )
 }
 
 /// Returns the (bytes received, sending address len, `RecvFlags`).
 #[cfg(not(target_os = "redox"))]
-fn sendmsg(
+pub(crate) fn sendmsg(
     fd: Socket,
     msg_name: *const sockaddr_storage,
     msg_namelen: socklen_t,
     bufs: &[IoSlice<'_>],
+    control_data: IoSlice<'_>,
     flags: c_int,
 ) -> io::Result<usize> {
     // libc::msghdr contains unexported padding fields on Fuchsia.
@@ -845,6 +853,9 @@ fn sendmsg(
     // Safety: Same as above about `*const` -> `*mut`.
     msg.msg_iov = bufs.as_ptr() as *mut _;
     msg.msg_iovlen = min(bufs.len(), IovLen::MAX as usize) as IovLen;
+    // Safety: Same as above about `*const` -> `*mut`.
+    msg.msg_control = control_data.as_ptr() as *mut _;
+    msg.msg_controllen = min(control_data.len(), u32::MAX as usize) as u32;
     syscall!(sendmsg(fd, &msg, flags)).map(|n| n as usize)
 }
 
